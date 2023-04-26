@@ -38,6 +38,23 @@ void UNorthbreachGameInstance::OnStart()
 
 void UNorthbreachGameInstance::OnLoginSuccess()
 {
+	PlayFab::ClientModels::FLoginWithCustomIDRequest Request;
+	Request.CreateAccount = true;
+	UServerSubsystem* ServerSubsystem = GetSubsystem<UServerSubsystem>();
+	FString Token = ServerSubsystem->GetAuthToken();
+	Token.MidInline(0, 99);
+	Request.CustomId = Token;
+	
+
+	ClientAPI->LoginWithCustomID(Request,
+		PlayFab::UPlayFabClientAPI::FLoginWithCustomIDDelegate::CreateUObject(this, &UNorthbreachGameInstance::OnPlayfabLoginSuccess),
+		PlayFab::FPlayFabErrorDelegate::CreateUObject(this, &UNorthbreachGameInstance::OnFail));
+
+	
+}
+
+void UNorthbreachGameInstance::OnPlayfabLoginSuccess(const PlayFab::ClientModels::FLoginResult& Result) const
+{
 	OnLevelOpneingStarted.Broadcast();
 
 	UWorld* World = GetWorld();
@@ -47,12 +64,16 @@ void UNorthbreachGameInstance::OnLoginSuccess()
 		return;
 	}
 
+	AccountInfo->LoginInfo = Result;
+
 	FTimerHandle UnusedHandle;
 	World->GetTimerManager().SetTimer(
 		UnusedHandle, this, &UNorthbreachGameInstance::GetToLobby, 2, false);
+
+	
 }
 
-void UNorthbreachGameInstance::GetToLobby()
+void UNorthbreachGameInstance::GetToLobby() const
 {
 	UWorld* World = GetWorld();
 	if (IsValid(World) == false)
@@ -67,12 +88,26 @@ void UNorthbreachGameInstance::OpenLobby()
 {
 	UServerSubsystem* ServerSubsystem = GetSubsystem<UServerSubsystem>();
 
-	ServerSubsystem->CreateDedicatedServerSession(FString(), false, FName("Northbreach_Lobby"));
+	bIsLobbyOpen = !bIsLobbyOpen;
+
+	UpdateLobbyStatus();
+
+	if (bIsLobbyOpen == true)
+	{
+		ServerSubsystem->CreateDedicatedServerSession(FString(), false, FName("Northbreach_Lobby"));
+		return;
+	}
+	ServerSubsystem->DestroySession(FName("Northbreach_Lobby"));
+}
+
+void UNorthbreachGameInstance::UpdateLobbyStatus()
+{
+	OnLobbyStateChange.Broadcast(bIsLobbyOpen);
 }
 
 void UNorthbreachGameInstance::StartMatchmaking()
 {
-
+	CreateMatchmakingTicket("Quickplay");
 }
 
 
@@ -92,45 +127,6 @@ void UNorthbreachGameInstance::StartMatchmaking()
 
 
 
-//-------------------------------------------------REGISTER-----------------------------------------------------------------------------------
-
-void UNorthbreachGameInstance::Register(FString Username, FString Email, FString Password)
-{
-	PlayFab::ClientModels::FRegisterPlayFabUserRequest Request;
-	Request.Email = Email;
-	Request.Username = Username;
-	Request.DisplayName = Username;
-	Request.Password = Password;
-	Request.TitleId = TitleID;
-
-	ClientAPI->RegisterPlayFabUser(Request,
-		PlayFab::UPlayFabClientAPI::FRegisterPlayFabUserDelegate::CreateUObject(this, &UNorthbreachGameInstance::OnRegisterSuccess),
-		PlayFab::FPlayFabErrorDelegate::CreateUObject(this, &UNorthbreachGameInstance::OnFail));
-}
-
-
-void UNorthbreachGameInstance::OnRegisterSuccess(const PlayFab::ClientModels::FRegisterPlayFabUserResult& Result) const
-{
-	OnSuccessfulRegister.Broadcast();
-}
-
-//-------------------------------------------------PASSWORD-RESET-----------------------------------------------------------------------------------
-
-void UNorthbreachGameInstance::Reset(FString Email)
-{
-	PlayFab::ClientModels::FSendAccountRecoveryEmailRequest Request;
-	Request.Email = Email;
-	Request.TitleId = TitleID;
-
-	ClientAPI->SendAccountRecoveryEmail(Request,
-		PlayFab::UPlayFabClientAPI::FSendAccountRecoveryEmailDelegate::CreateUObject(this, &UNorthbreachGameInstance::OnResetSuccess),
-		PlayFab::FPlayFabErrorDelegate::CreateUObject(this, &UNorthbreachGameInstance::OnFail));
-}
-
-void UNorthbreachGameInstance::OnResetSuccess(const PlayFab::ClientModels::FSendAccountRecoveryEmailResult& Result) const
-{ 
-	OnPlayFabError.Broadcast("Recovery Email has been sent successfully");
-}
 
 //-----------------------------------------------------------------------------------------------------------------------------------------------
 //-------------------------------------------------MATCHMAKING-----------------------------------------------------------------------------------
@@ -161,7 +157,7 @@ void UNorthbreachGameInstance::OnCreateTicketSuccess(const PlayFab::MultiplayerM
 {
 	AccountInfo->CurrentTicketID = Result.TicketId;
 	
-	UE_LOG(LogTemp, Display, TEXT("UNorthbreachGameInstance : Created ticked[%s] for queue{ %s }"), *AccountInfo->CurrentTicketID, *AccountInfo->CurrentQueueName);
+	UE_LOG(LogTemp, Display, TEXT("UNorthbreachGameInstance : Created ticket[%s] for queue{ %s }"), *AccountInfo->CurrentTicketID, *AccountInfo->CurrentQueueName);
 
 	UWorld* World = GetWorld();
 	if (IsValid(World) == false)
@@ -188,7 +184,7 @@ void UNorthbreachGameInstance::GetMatchmakingTicket(FString QueueName, FString T
 	Request.QueueName = QueueName;
 	Request.TicketId  = TicketID;
 
-	UE_LOG(LogTemp, Display, TEXT("UNorthbreachGameInstance : Ticked[%s] for queue{ %s } is searching"), *AccountInfo->CurrentTicketID, *AccountInfo->CurrentQueueName);
+	UE_LOG(LogTemp, Display, TEXT("UNorthbreachGameInstance : Ticket[%s] for queue{ %s } is searching"), *AccountInfo->CurrentTicketID, *AccountInfo->CurrentQueueName);
 
 	MultiplayerAPI->GetMatchmakingTicket(Request,
 		PlayFab::UPlayFabMultiplayerAPI::FGetMatchmakingTicketDelegate::CreateUObject(this, &UNorthbreachGameInstance::OnGetTicketSuccess),
@@ -203,7 +199,7 @@ void UNorthbreachGameInstance::OnGetTicketSuccess(const PlayFab::MultiplayerMode
 		return;
 	}
 
-	UE_LOG(LogTemp, Display, TEXT("UNorthbreachGameInstance : Ticked[%s] for queue{ %s } found Match[%s]"), *AccountInfo->CurrentTicketID, *AccountInfo->CurrentQueueName, *Result.MatchId);
+	UE_LOG(LogTemp, Display, TEXT("UNorthbreachGameInstance : Ticket[%s] for queue{ %s } found Match[%s]"), *AccountInfo->CurrentTicketID, *AccountInfo->CurrentQueueName, *Result.MatchId);
 
 	UWorld* World = GetWorld();
 	if (IsValid(World) == false)
@@ -230,7 +226,7 @@ void UNorthbreachGameInstance::GetMatch(FString MatchID, FString QueueName) cons
 	Request.MatchId = MatchID;
 	Request.QueueName = QueueName;
 
-	UE_LOG(LogTemp, Display, TEXT("UNorthbreachGameInstance : Ticked[%s] for queue{ %s } entering Match[%s]"), *AccountInfo->CurrentTicketID, *AccountInfo->CurrentQueueName, *MatchID);
+	UE_LOG(LogTemp, Display, TEXT("UNorthbreachGameInstance : Ticket[%s] for queue{ %s } entering Match[%s]"), *AccountInfo->CurrentTicketID, *AccountInfo->CurrentQueueName, *MatchID);
 
 	MultiplayerAPI->GetMatch(Request,
 		PlayFab::UPlayFabMultiplayerAPI::FGetMatchDelegate::CreateUObject(this, &UNorthbreachGameInstance::OnGetMatchSuccess),

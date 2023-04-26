@@ -27,6 +27,12 @@ public:
 	UFUNCTION()
 	void OnSessionCreationReply(FName SessionName, bool bIsSuccessful);
 
+	UFUNCTION()
+	void DestroySession(FName SessionName);
+
+	UFUNCTION()
+	void OnSessionDestroyReply(FName SessionName, bool bIsSuccessful);
+
 	void EOSLogin();
 	void OnLoginComplete(int32 LocalUserNum, bool bWasSuccessful, const FUniqueNetId& UserId, const FString& Error);
 
@@ -52,4 +58,5 @@ public:
 	UPROPERTY()
 	FString CredentialName = "Northbreach";
 
+	FString GetAuthToken();
 };

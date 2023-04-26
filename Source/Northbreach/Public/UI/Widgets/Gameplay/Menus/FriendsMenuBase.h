@@ -26,10 +26,22 @@ protected:
 	UPROPERTY(EditDefaultsOnly, meta = (BindWidget))
 	class UButton* Close;
 
+	UPROPERTY(EditDefaultsOnly, meta = (BindWidget))
+	class UTextBlock* LobbyBtnText;
+
 	UFUNCTION()
 	void CloseClicked();
 
+	UPROPERTY(EditDefaultsOnly)
+	FText TextToOpen;
+
+	UPROPERTY(EditDefaultsOnly)
+	FText TextToClose;
+
 public:
+
+	UFUNCTION()
+	void SetLobbyText(bool State);
 
 	virtual void NativeOnInitialized() override;
 

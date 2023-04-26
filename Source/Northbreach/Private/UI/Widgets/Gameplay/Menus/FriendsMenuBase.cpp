@@ -4,6 +4,7 @@
 #include "UI/Widgets/Gameplay/Menus/FriendsMenuBase.h"
 
 #include "Components/Button.h"
+#include "Components/TextBlock.h"
 
 void UFriendsMenuBase::NativeOnInitialized()
 {
@@ -19,4 +20,14 @@ void UFriendsMenuBase::OpenLobbyClicked()
 void UFriendsMenuBase::CloseClicked()
 {
 	OnCloseClicked.Broadcast(this);
+}
+
+void UFriendsMenuBase::SetLobbyText(bool State)
+{
+	if (State == false)
+	{
+		LobbyBtnText->SetText(TextToOpen);
+		return;
+	}
+	LobbyBtnText->SetText(TextToClose);
 }

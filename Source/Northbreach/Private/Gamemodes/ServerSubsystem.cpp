@@ -85,6 +85,17 @@ void UServerSubsystem::OnLoginComplete(int32 LocalUserNum, bool bWasSuccessful, 
 	
 }
 
+FString UServerSubsystem::GetAuthToken()
+{
+	IOnlineIdentityPtr Identity = OnlineSubsystem->GetIdentityInterface();
+	if (Identity.IsValid() == false)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::GetAuthToken Identity == false"));
+		return FString();
+	}
+	return Identity->GetAuthToken(0);
+}
+
 void UServerSubsystem::CreateDedicatedServerSession(FString InMapPath, bool bIsDedicated, FName SessionName)
 {
 	if (bIsInitialized == false)
@@ -124,11 +135,6 @@ void UServerSubsystem::CreateDedicatedServerSession(FString InMapPath, bool bIsD
 	SessionCreationSettings.bUseLobbiesIfAvailable = !bIsDedicated;
 
 	SessionCreationSettings.Set(SEARCH_KEYWORDS, SessionName.ToString(), EOnlineDataAdvertisementType::ViaOnlineService);
-	
-	/*FOnlineSessionSetting compoundSessionName;
-	compoundSessionName.AdvertisementType = EOnlineDataAdvertisementType::ViaOnlineService;
-	compoundSessionName.Data = FString("Northbreach");*/
-	//SessionCreationSettings.Settings.Add(FName("SESSION_NAME"), SessionName);
 
 	SessionPtr->OnCreateSessionCompleteDelegates.AddUObject(this, &UServerSubsystem::OnSessionCreationReply);
 	SessionPtr->CreateSession(0, SessionName, SessionCreationSettings);
@@ -165,6 +171,46 @@ void UServerSubsystem::OnSessionCreationReply(FName SessionName, bool bIsSuccess
 	}
 	World->ServerTravel(MapPath);
 	
+}
+
+void UServerSubsystem::DestroySession(FName SessionName)
+{
+	if (bIsInitialized == false)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::DestroySession OSS is not initialized"));
+		return;
+	}
+
+	IOnlineSessionPtr SessionPtr = OnlineSubsystem->GetSessionInterface();
+	if (SessionPtr.IsValid() == false)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::DestroySession SessionPtr == false"));
+		return;
+	}
+	SessionPtr->OnDestroySessionCompleteDelegates.AddUObject(this, &UServerSubsystem::OnSessionDestroyReply);
+	SessionPtr->DestroySession(SessionName);
+}
+
+void UServerSubsystem::OnSessionDestroyReply(FName SessionName, bool bIsSuccessful)
+{
+	if (bIsInitialized == false)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::OnSessionDestroyReply OSS is not initialized"));
+		return;
+	}
+	UE_LOG(LogTemp, Display, TEXT("Destoy Session %s reply = %d"), *SessionName.ToString(), bIsSuccessful);
+	if (bIsSuccessful == false)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Session destroy faild"));
+		return;
+	}
+	IOnlineSessionPtr SessionPtr = OnlineSubsystem->GetSessionInterface();
+	if (SessionPtr.IsValid() == false)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::CreateDedicatedServerSession SessionPtr == false"));
+		return;
+	}
+	SessionPtr->ClearOnDestroySessionCompleteDelegates(this);
 }
 
 

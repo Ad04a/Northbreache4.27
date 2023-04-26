@@ -16,6 +16,7 @@
 #include "NorthbreachGameInstance.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FPlayFabErrorSignature, FString, Message);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FLobbyStateSignature, bool, State);
 
 UCLASS()
 class NORTHBREACH_API UAccountInfo : public UObject
@@ -59,20 +60,23 @@ protected:
 	UPROPERTY(EditDefaultsOnly)
 	FString CredentialName = "Northbreach";
 
+	bool bIsLobbyOpen = false;
+
 	PlayFabClientPtr ClientAPI = nullptr;
 	PlayFabMultiplayerPtr MultiplayerAPI = nullptr;
 
 	UFUNCTION()
 	void OnLoginSuccess();
-	void OnRegisterSuccess(const PlayFab::ClientModels::FRegisterPlayFabUserResult& Result) const;
-	void OnResetSuccess(const PlayFab::ClientModels::FSendAccountRecoveryEmailResult& Result) const;
+
+	void OnPlayfabLoginSuccess(const PlayFab::ClientModels::FLoginResult& Result) const;
+
 	void OnCreateTicketSuccess(const PlayFab::MultiplayerModels::FCreateMatchmakingTicketResult& Result) const;
 	void OnGetTicketSuccess(const PlayFab::MultiplayerModels::FGetMatchmakingTicketResult& Result) const;
 	void OnGetMatchSuccess(const PlayFab::MultiplayerModels::FGetMatchResult& Result) const;
 
 	void OnFail(const PlayFab::FPlayFabCppError& ErrorResult) const;
 
-	void GetToLobby();
+	void GetToLobby() const;
 	void CheckIfMatchFound() const;
 
 public:
@@ -80,14 +84,9 @@ public:
 	FPlayFabErrorSignature OnPlayFabError;
 	FButtonClickedSignature OnSuccessfulRegister;
 	FButtonClickedSignature OnLevelOpneingStarted;
+	FLobbyStateSignature OnLobbyStateChange;
 
 	virtual void OnStart() override;
-	
-	UFUNCTION()
-	void Register(FString Username, FString Email, FString Password);
-
-	UFUNCTION()
-	void Reset(FString Email);
 
 	UFUNCTION()
 	void CreateMatchmakingTicket(FString QueueName = "Quickplay") const;
@@ -106,5 +105,7 @@ public:
 
 	UFUNCTION()
 	void StartMatchmaking();
+
+	void UpdateLobbyStatus();
 
 };

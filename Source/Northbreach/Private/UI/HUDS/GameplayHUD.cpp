@@ -38,6 +38,8 @@ void AGameplayHUD::BeginPlay()
 
 	FriendsMenuWidget->OnOpenLobbyClicked.AddDynamic(GameInstance, &UNorthbreachGameInstance::OpenLobby);
 	FriendsMenuWidget->OnCloseClicked.AddDynamic(this, &AGameplayHUD::HideWidget);
+	GameInstance->OnLobbyStateChange.AddDynamic(FriendsMenuWidget, &UFriendsMenuBase::SetLobbyText);
+	GameInstance->UpdateLobbyStatus();
 
 	MatchMenuWidget = CreateWidget<UMatchMenuBase>(World, MatchMenuClass);
 	if (IsValid(MatchMenuWidget) == false) {
