@@ -23,8 +23,9 @@ void UServerSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	bIsInitialized = true;
 }
 
-void UServerSubsystem::Setup(bool InIsDeveloper, FString InDevLoopback, FString InCredentialName)
+void UServerSubsystem::Setup(bool InIsCurrentUserDedicated, bool InIsDeveloper, FString InDevLoopback, FString InCredentialName)
 {
+	bIsCurrentUserDedicated = InIsCurrentUserDedicated;
 	bIsDeveloper = InIsDeveloper;
 	DevLoopback = InDevLoopback;
 	CredentialName = InCredentialName;
@@ -163,14 +164,22 @@ void UServerSubsystem::OnSessionCreationReply(FName SessionName, bool bIsSuccess
 	}
 	SessionPtr->ClearOnCreateSessionCompleteDelegates(this);
 
+	if (bIsCurrentUserDedicated == false)
+	{
+		return;
+	}
+
 	UWorld* World = GetWorld();
 	if (IsValid(World) == false)
 	{
 		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::OnSessionCreationReply IsValid(World) == false"));
 		return;
 	}
+
+	UGameplayStatics::OpenLevel(World, "Arena");
+
 	World->ServerTravel(MapPath);
-	
+
 }
 
 void UServerSubsystem::DestroySession(FName SessionName)
@@ -214,79 +223,87 @@ void UServerSubsystem::OnSessionDestroyReply(FName SessionName, bool bIsSuccessf
 }
 
 
-void UServerSubsystem::FindSessionAndJoin()
+void UServerSubsystem::FindSessions(FName SessionName)
 {
-	/*IOnlineSessionPtr SessionPtr = Online::GetSessionInterface();
-	if (SessionPtr.IsValid() == false)
+	if (bIsInitialized == false)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::FindSessionAndJoin SessionPtr == false"));
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::FindSessions OSS is not initialized"));
 		return;
 	}
-	SessionSearch = MakeShareable(new FOnlineSessionSearch());
 
-	//SessionSearch->QuerySettings.Set(SEARCH_KEYWORDS, SessionIdentifier.ToString(), EOnlineComparisonOp::Equals);
-	FOnlineSessionSetting compoundSessionName;
-	compoundSessionName.AdvertisementType = EOnlineDataAdvertisementType::ViaOnlineService;
-	compoundSessionName.Data = FString("Northbreach");
-	SessionSearch->QuerySettings.SearchParams.Add(FName("SESSION_NAME"), FOnlineSessionSearchParam(SessionIdentifier.ToString(), EOnlineComparisonOp::Equals));
-	SessionSearch->bIsLanQuery = false;
-	SessionSearch->MaxSearchResults = 1000;
-	UE_LOG(LogTemp, Display, TEXT("Searhing session"));
+	IOnlineSessionPtr SessionPtr = OnlineSubsystem->GetSessionInterface();
+	if (SessionPtr.IsValid() == false)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::FindSessions SessionPtr == false"));
+		return;
+	}
+
+	CurrentSesssionSearch = SessionName;
+
+	SearchSettings = MakeShareable(new FOnlineSessionSearch());
+	SearchSettings->QuerySettings.Set(SEARCH_KEYWORDS, SessionName.ToString(), EOnlineComparisonOp::Equals);
+	SearchSettings->MaxSearchResults = 10000;
 	SessionPtr->OnFindSessionsCompleteDelegates.AddUObject(this, &UServerSubsystem::OnSessionFoundSuccess);
-	SessionPtr->FindSessions(0, SessionSearch.ToSharedRef());*/
+
+	SessionPtr->FindSessions(0, SearchSettings.ToSharedRef());
+
 }
 
 void UServerSubsystem::OnSessionFoundSuccess(bool bWasSuccess)
 {
-	/*if (bWasSuccess == false)
+	if (bIsInitialized == false)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::OnSessionFoundSuccess Cannot join session"));
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::OnSessionFoundSuccess OSS is not initialized"));
 		return;
 	}
-	IOnlineSessionPtr SessionPtr = Online::GetSessionInterface();
+	UE_LOG(LogTemp, Display, TEXT("Find Session reply = %d"), SearchSettings->SearchResults.Num());
+	if (bWasSuccess == false)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Session search faild"));
+		return;
+	}
+	IOnlineSessionPtr SessionPtr = OnlineSubsystem->GetSessionInterface();
 	if (SessionPtr.IsValid() == false)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::FindSessionAndJoin SessionPtr == false"));
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::FindSessions SessionPtr == false"));
 		return;
 	}
-	if (SessionSearch.IsValid() == false)
+
+	SessionPtr->ClearOnFindSessionsCompleteDelegates(this);
+
+	if (SearchSettings->SearchResults.Num() < 1)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::FindSessionAndJoin SessionSearch.IsValid() == false"));
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::FindSessions No sessions found"));
 		return;
 	}
-	UE_LOG(LogTemp, Display, TEXT("%d sessions found"), SessionSearch->SearchResults.Num());
-	if (SessionSearch->SearchResults.Num() < 1)
-	{
-		UE_LOG(LogTemp, Error, TEXT("Canceling operation"));
-		return;
-	}
-	
-	if (SessionSearch->SearchResults[0].IsValid() == false)
-	{
-		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::FindSessionAndJoin SessionSearch->SearchResult[0].IsValid() == false"));
-		return;
-	}
-	UE_LOG(LogTemp, Display, TEXT("Trying to join session"));
 	SessionPtr->OnJoinSessionCompleteDelegates.AddUObject(this, &UServerSubsystem::OnJoinSessionComplete);
-	SessionPtr->JoinSession(0, SessionIdentifier, SessionSearch->SearchResults[0]);*/
+	SessionPtr->JoinSession(0, CurrentSesssionSearch, SearchSettings->SearchResults[0]);
 }
 
-/*void UServerSubsystem::OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result)
+void UServerSubsystem::OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result)
 {
 	if (Result != EOnJoinSessionCompleteResult::Success)
 	{
 		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::OnJoinSessionComplete Cannot join session"));
 		return;
 	}
-	UE_LOG(LogTemp, Display, TEXT("Joining session"));
-	FString JoinAdress;
-	IOnlineSessionPtr SessionPtr = Online::GetSessionInterface();
-	if (SessionPtr.IsValid() == false)
+
+	if (bIsInitialized == false)
 	{
-		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::FindSessionAndJoin SessionPtr == false"));
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::OnSessionFoundSuccess OSS is not initialized"));
 		return;
 	}
-	SessionPtr->GetResolvedConnectString(FName("Northbreach"), JoinAdress);
+	IOnlineSessionPtr SessionPtr = OnlineSubsystem->GetSessionInterface();
+	if (SessionPtr.IsValid() == false)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::FindSessions SessionPtr == false"));
+		return;
+	}
+	SessionPtr->ClearOnJoinSessionCompleteDelegates(this);
+	UE_LOG(LogTemp, Display, TEXT("Joining session"));
+
+	FString JoinAdress = FString();
+	SessionPtr->GetResolvedConnectString(SessionName, JoinAdress);
 	
 	if (JoinAdress.IsEmpty() == true)
 	{
@@ -301,5 +318,10 @@ void UServerSubsystem::OnSessionFoundSuccess(bool bWasSuccess)
 		return;
 	}
 	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(World, 0);
+	if (IsValid(PlayerController) == false)
+	{
+		UE_LOG(LogTemp, Error, TEXT("UServerSubsystem::FindSessionAndJoin IsValid(PlayerController) == false"));
+		return;
+	}
 	PlayerController->ClientTravel(JoinAdress, ETravelType::TRAVEL_Absolute);
-}*/
+}

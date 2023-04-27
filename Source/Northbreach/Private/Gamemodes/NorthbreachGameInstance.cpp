@@ -17,14 +17,15 @@ void UNorthbreachGameInstance::OnStart()
 
 	UServerSubsystem* ServerSubsystem = GetSubsystem<UServerSubsystem>();
 
-	ServerSubsystem->Setup(bIsDeveloper, DevLoopback, CredentialName);
-
 	if (IsDedicatedServerInstance() == true)
 	{
+		ServerSubsystem->Setup(true, bIsDeveloper, DevLoopback, CredentialName);
 		ServerSubsystem->CreateDedicatedServerSession(PathToArena);
 
 		return;
 	}
+
+	ServerSubsystem->Setup(false, bIsDeveloper, DevLoopback, CredentialName);
 	ServerSubsystem->OnLogin.AddDynamic(this, &UNorthbreachGameInstance::OnLoginSuccess);
 	ServerSubsystem->EOSLogin();
 	ClientAPI = IPlayFabModuleInterface::Get().GetClientAPI();
@@ -107,6 +108,10 @@ void UNorthbreachGameInstance::UpdateLobbyStatus()
 
 void UNorthbreachGameInstance::StartMatchmaking()
 {
+	UServerSubsystem* ServerSubsystem = GetSubsystem<UServerSubsystem>();
+
+	ServerSubsystem->FindSessions();
+
 	CreateMatchmakingTicket("Quickplay");
 }
 
@@ -261,10 +266,10 @@ void UNorthbreachGameInstance::OnGetMatchSuccess(const PlayFab::MultiplayerModel
 	}
 
 	UServerSubsystem* ServerSubsystem = GetSubsystem<UServerSubsystem>();
-	ServerSubsystem->FindSessionAndJoin();
+	ServerSubsystem->FindSessions();
 
-	World->GetTimerManager().SetTimer(
-		AccountInfo->MatchmakingHandle, ServerSubsystem, &UServerSubsystem::FindSessionAndJoin, 6, true);
+	//World->GetTimerManager().SetTimer(
+	//	AccountInfo->MatchmakingHandle, ServerSubsystem, &UServerSubsystem::FindSessions, 6, true);
 
 	UE_LOG(LogTemp, Display, TEXT("UNorthbreachGameInstance : Player joined Match[%s]"), *Result.MatchId);
 }

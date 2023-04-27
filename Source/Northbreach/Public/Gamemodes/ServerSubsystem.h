@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "Interfaces/OnlineSessionInterface.h"
+#include "OnlineSessionSettings.h"
 #include "ServerSubsystem.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FLoginSignatrue);
@@ -17,9 +19,12 @@ public:
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	bool bIsInitialized = false;
-	void Setup(bool InIsDeveloper, FString InDevLoopback, FString InCredentialName);
+	void Setup(bool InIsCurrentUserDedicated, bool InIsDeveloper, FString InDevLoopback, FString InCredentialName);
 
 	FLoginSignatrue OnLogin;
+
+	FName CurrentSesssionSearch;
+	bool bIsCurrentUserDedicated = true;
 
 	UFUNCTION()
 	void CreateDedicatedServerSession(FString InMapPath, bool bIsDedicated=true, FName SessionName= "Northbreach");
@@ -36,15 +41,15 @@ public:
 	void EOSLogin();
 	void OnLoginComplete(int32 LocalUserNum, bool bWasSuccessful, const FUniqueNetId& UserId, const FString& Error);
 
-	void FindSessionAndJoin();
+	void FindSessions(FName SessionName = "Northbreach");
 
 	void OnSessionFoundSuccess(bool bWasSuccess);
 
-	//void OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
+	void OnJoinSessionComplete(FName SessionName, EOnJoinSessionCompleteResult::Type Result);
 
 	class IOnlineSubsystem* OnlineSubsystem;
 
-	//TSharedPtr<FOnlineSessionSearch> SessionSearch;
+	TSharedPtr<FOnlineSessionSearch> SearchSettings;
 
 	UPROPERTY()
 	FString MapPath;
